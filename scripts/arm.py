@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 #!/bin/env python3
+=======
+#!/usr/bin/env python
+>>>>>>> f766a195c3bdb831eca0c3a65c0c44130fc6c1a2
 import sys
 import actionlib
 import rospy
