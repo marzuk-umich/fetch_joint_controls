@@ -1,10 +1,28 @@
+#!/usr/bin/env python
 import numpy as np
 import matplotlib.pyplot as plt
 
 
+
+
+
+
+# # Parameters for the trajectory
+# desired_position = np.ones((7, 1)) * 10  # Example desired positions
+# initial_position = np.zeros((7, 1))  # Start at zero
+# max_vel = 2  # Maximum velocity (example)
+# total_time = 10  # Total time in seconds
+
+# update_trajectory_with_optimizer(desired_position, initial_position, max_vel, total_time)
+
+
+
+
+
 def generate_trajectory(desired_position, initial_position, max_vel, total_time):
+
     # Create time array
-    t = np.linspace(0, total_time, num=int(100*total_time))  # Creating a 100 samples per second time array
+    t = np.linspace(0, total_time, num=int(1*total_time))  # Creating a 100 samples per second time array
 
     # Calculating coefficients for a quintic polynomial
     # x(t) = a0 + a1*t + a2*t^2 + a3*t^3 + a4*t^4 + a5*t^5
@@ -27,13 +45,15 @@ def generate_trajectory(desired_position, initial_position, max_vel, total_time)
         0,                  # initial acc
         0                   # final acc
     ])
-    
     coefficients = np.linalg.solve(A, B)
     
     # Generating position, velocity, and acceleration
     position = np.polyval(coefficients[::-1], t)
     velocity = np.polyval(np.polyder(coefficients[::-1], 1), t)
     acceleration = np.polyval(np.polyder(coefficients[::-1], 2), t)
+    print("position:", np.shape(position))
+    print("velocity:", np.shape(velocity))
+    print("acceleration:", np.shape(acceleration))
     
     # Clip maximum velocity and recompute with new time if necessary
     if np.max(np.abs(velocity)) > max_vel:
@@ -41,8 +61,32 @@ def generate_trajectory(desired_position, initial_position, max_vel, total_time)
         max_acc = np.max(np.abs(acceleration))
         total_time = (desired_position - initial_position) / max_vel + max_vel / max_acc
         return generate_trajectory(desired_position, initial_position, max_vel, total_time)
-    
-    return t, position, velocity
+
+
+    # Position
+    plt.subplot(3, 1, 1)
+    plt.plot(t, position, label="Position")
+    plt.ylabel("Position")
+    plt.legend()
+ 
+    # Velocity
+    plt.subplot(3, 1, 2)
+    plt.plot(t, velocity, label="Velocity", color="orange")
+    plt.ylabel("Velocity")
+    plt.legend()
+ 
+    # Acceleration
+    plt.subplot(3, 1, 3)
+    plt.plot(t, acceleration, label="Acceleration", color="green")
+    plt.ylabel("Acceleration")
+    plt.xlabel("Time")
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return t, position, velocity, acceleration
+
 
 
 def test_joints_independently(arm_client):
