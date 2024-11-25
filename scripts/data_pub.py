@@ -1,48 +1,65 @@
-#!/bin/env python3
-
+#!/usr/bin/env python3
 
 import rospy
-from std_msgs.msg import Float64MultiArray, Float32
-from geometry_msgs.msg import Point
+from std_msgs.msg import Float32MultiArray, Float32
+from fetch_joint_controls.msg import optimizerMessage
 import numpy as np
-# Initialize the ROS node
-rospy.init_node('trajectory_data_publisher')
+import time
 
-# Create publishers for different topics
-ka_pub = rospy.Publisher('joint_accelerations', Float64MultiArray, queue_size=10)
-fail_flag_pub = rospy.Publisher('fail_flag', Float32, queue_size=10)
-time_pub = rospy.Publisher('plan_time_curr', Float32, queue_size=10)
-obs_pub = rospy.Publisher('obstacle_position', Point, queue_size=10)
-obs_size_pub = rospy.Publisher('obstacle_size', Point, queue_size=10)
+def load_data(file_path):
+    """
+    Load the dataset from a file.
+    Modify this function based on your file format.
+    """
 
-# Your data
-data = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_opt_info.npy', allow_pickle=True)
-rate = rospy.Rate(2)  # Set rate to publish data (e.g., 2 Hz)
+    # Assuming a NumPy file (can be adapted for CSV, JSON, etc.)
+    data = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)    
+    t = data.item().get('t')           # 1D array: time steps
+    fail_flag = data.item().get('fail_flag')
+    q = data.item().get('q')        # 2D array: joint positions (NxM)
+    qd = data.item().get('qd')         # 2D array: joint velocities (NxM)
+    qdd = data.item().get('qdd')       # 2D array: joint accelerations (NxM)
+    return t,fail_flag, q, qd, qdd
 
-# Publish data for each time step
-# data.item().get('ka')
-for i in range(len(data.item().get('plan_time_curr'))):
-    # Prepare joint accelerations data
-    ka_msg = Float64MultiArray()
-    ka_msg.data = data.item().get('ka')[i]
-    ka_pub.publish(ka_msg)
+def publish_joint_data(file_path):
+    """
+    Publishes joint data to ROS topics every 2 seconds.
+    """
+    rospy.init_node('optimizer_based_joint_data_publisher', anonymous=True)
 
-    # Publish fail_flag for the current time step
-    fail_flag_msg = Float32()
-    fail_flag_msg.data = data.item().get('fail_flag')[i]
-    fail_flag_pub.publish(fail_flag_msg)
+    # Define publishers for joint data
+    pub = rospy.Publisher('/optimizer_data', optimizerMessage, queue_size=10)
 
-    # Publish the current time
-    time_msg = Float32()
-    time_msg.data = data.item().get('plan_time_curr')[i]
-    time_pub.publish(time_msg)
+    # Load data from the file
+    t,fail_flag, q, qd, qdd = load_data(file_path)
 
-    # Publish obstacle data (if it doesn't change, publish once)
-    if i == 0:  # Only publish once
-        obs_msg = Point(*data.item().get('obs_pos')[0])
-        obs_pub.publish(obs_msg)
 
-        obs_size_msg = Point(*data.item().get('obs_size')[0])
-        obs_size_pub.publish(obs_size_msg)
+    rate = rospy.Rate(50)  # Publish every 2 seconds (0.5 Hz)
+    msg = optimizerMessage()
+    for i in range(len(t)):
+        print(i)
+        # if rospy.is_shutdown():
+        #     break
 
-    rate.sleep()
+        # # Prepare messages
+        msg.time = Float32(data=t[i])
+        # msg.fail_flag = Float32(data=fail_flag[i])
+        msg.position = Float32MultiArray(data=q[i,:].tolist())
+        msg.velocity = Float32MultiArray(data=qd[i,:].tolist())
+        msg.acceleration = Float32MultiArray(data=qdd[i,:].tolist())
+        
+        # Publish data
+        pub.publish(msg)
+ 
+
+        # rospy.loginfo(f"Published data for time {time_step:.2f}s")
+        
+        rate.sleep()
+
+if __name__ == "__main__":
+    file_path =  np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
+
+    try:
+        publish_joint_data(file_path)
+    except rospy.ROSInterruptException:
+        pass

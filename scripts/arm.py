@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 #!/bin/env python3
-=======
-#!/usr/bin/env python
->>>>>>> f766a195c3bdb831eca0c3a65c0c44130fc6c1a2
 import sys
 import actionlib
 import rospy
@@ -116,22 +112,46 @@ class FollowTrajectoryClient(object):
 
 def update_trajectory_with_optimizer(desired_position, initial_position, max_vel, total_time):
     
-    dt = 1 
+    
+    detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_detailed_traj.npy', allow_pickle=True)
+    initial_position = detailed_trajectory.item().get('q')[0]
+    initial_velocity = detailed_trajectory.item().get('qd')[0]
+
+    dt = 0.5
     num_joints = 7
     current_time = np.zeros((1,num_joints))
-    position = np.zeros((1, num_joints))
+    position = np.zeros((1, num_joints))   
+    position[0,:6] = initial_position
+    print(position)
     velocity = np.zeros((1, num_joints))  
+    velocity[0,:6] = initial_velocity
+    print(velocity)
     acceleration = np.zeros((1, num_joints)) 
-
+    print(acceleration)
     # Start loop to periodically get optimizer data and update trajectory
     while True:
-        optimizer_data = np.load('fetch_joint_controls/scripts/center_box_avoidance_opt_info.npy', allow_pickle=True)
+        """
+        TODO: 
+        - make a rosnode to publish the data from the optimizer
+        - data to be published for each discrete time interval and not just dump the data 
+        - subscribe to the node at 0.5 sec
+        - record video of the points
+        - compare with the original trajectory 
+        - code to match with the repo and make it pretty.
+        """
+        optimizer_data = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_opt_info.npy', allow_pickle=True)
+        print(optimizer_data)
         fail_flag = optimizer_data.item().get('fail_flag')
 
         if fail_flag[-1] != 0:
             acceleration[:6] = optimizer_data.item().get('ka')  # Update acceleration from optimizer
-        else:
-            velocity = np.zeros((0,num_joints))  # Stop robot if no data - breaking
+        # else:
+        #     velocity = np.zeros((1,num_joints))  # Stop robot if no data - breaking
+        print(np.shape(position))
+        print(np.shape(velocity))
+        print(np.shape(acceleration))
+        print(velocity)
+        print(position)
 
         # Update position and velocity using piecewise linear acceleration
         velocity += dt * acceleration   # v = u + at
@@ -227,13 +247,13 @@ if __name__ == '__main__':
 
     arm_client.move_to(arm_waypoints, False)
 
-    # Move joints independently using simulation!!
-    rospy.loginfo("Moving joints independently...")
-    waypoints = test_joints_independently(arm_client)
-    arm_client.move_to(waypoints, False)
+    # # Move joints independently using simulation!!
+    # rospy.loginfo("Moving joints independently...")
+    # waypoints = test_joints_independently(arm_client)
+    # arm_client.move_to(waypoints, False)
 
-    print("ARM STATE: ", arm_client.state)
-    # input("Press any key")
+    # print("ARM STATE: ", arm_client.state)
+    # # input("Press any key")
 
     xi = 0.
     xf = 1.48353

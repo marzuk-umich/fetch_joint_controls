@@ -1,0 +1,6 @@
+std_msgs/Float32 time
+std_msgs/Float32 fail_flag
+std_msgs/Float32MultiArray position
+std_msgs/Float32MultiArray velocity
+std_msgs/Float32MultiArray acceleration
+

@@ -63,27 +63,27 @@ def generate_trajectory(desired_position, initial_position, max_vel, total_time)
         return generate_trajectory(desired_position, initial_position, max_vel, total_time)
 
 
-    # Position
-    plt.subplot(3, 1, 1)
-    plt.plot(t, position, label="Position")
-    plt.ylabel("Position")
-    plt.legend()
+    # # Position
+    # plt.subplot(3, 1, 1)
+    # plt.plot(t, position, label="Position")
+    # plt.ylabel("Position")
+    # plt.legend()
  
-    # Velocity
-    plt.subplot(3, 1, 2)
-    plt.plot(t, velocity, label="Velocity", color="orange")
-    plt.ylabel("Velocity")
-    plt.legend()
+    # # Velocity
+    # plt.subplot(3, 1, 2)
+    # plt.plot(t, velocity, label="Velocity", color="orange")
+    # plt.ylabel("Velocity")
+    # plt.legend()
  
-    # Acceleration
-    plt.subplot(3, 1, 3)
-    plt.plot(t, acceleration, label="Acceleration", color="green")
-    plt.ylabel("Acceleration")
-    plt.xlabel("Time")
-    plt.legend()
+    # # Acceleration
+    # plt.subplot(3, 1, 3)
+    # plt.plot(t, acceleration, label="Acceleration", color="green")
+    # plt.ylabel("Acceleration")
+    # plt.xlabel("Time")
+    # plt.legend()
 
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
 
     return t, position, velocity, acceleration
 

@@ -133,7 +133,7 @@ def update_trajectory_with_optimizer(desired_position, initial_position, max_vel
         # Update position and velocity using piecewise linear acceleration
         velocity += dt * acceleration   # v = u + at
         position += velocity * dt  # s = s + v*t
-
+    
         # Wait for the next interval
         time.sleep(dt)
         current_time += np.ones((1,num_joints))*dt
