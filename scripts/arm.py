@@ -42,7 +42,8 @@ class FollowTrajectoryClient(object):
             trajectory.points[i].time_from_start = rospy.Duration(waypoints[i, 0, 0])
             trajectory.points[i].positions = waypoints[i, 1, :]
             trajectory.points[i].velocities = waypoints[i, 2, :]
-            trajectory.points[i].accelerations = [0.0] * len(waypoints[i, 1, :]) # Because there is no acceleration data
+            trajectory.points[i].accelerations =  waypoints[i, 3, :]
+            # print(trajectory.points[i].accelerations)
         follow_goal = FollowJointTrajectoryGoal()
         follow_goal.trajectory = trajectory
         follow_goal.goal_time_tolerance = rospy.Duration(0.0)
@@ -81,12 +82,14 @@ class FollowTrajectoryClient(object):
         time = np.ones((1, 1, self.config['joints_num'])) * 1
         goal_pos = self.state[:self.config['joints_num'], 0][np.newaxis, np.newaxis, :]
         goal_vel = np.zeros((1, 1, self.config['joints_num']))
-        waypoint = np.concatenate([time, goal_pos, goal_vel], axis=1)
+        goal_accln = np.zeros((1, 1, self.config['joints_num']))
+
+        waypoint = np.concatenate([time, goal_pos, goal_vel, goal_accln], axis=1)
         waypoints = np.ones((n, *waypoint.shape[1:]), dtype=waypoint.dtype) * waypoint
         return waypoints
     
     def create_zero_waypoint(self, n=1):
-        return np.zeros((n, 3, self.config['joints_num']))
+        return np.zeros((n, 4, self.config['joints_num']))
     
     def record_state(self):
         self.state_recordings = self.state.copy()
@@ -111,26 +114,117 @@ class FollowTrajectoryClient(object):
         self.time_recordings -= arm_client.time_recordings[0]
 
 
-def update_trajectory_with_optimizer(desired_position, initial_position, max_vel, total_time):
+def plot_trajectory():
+    global initial_position, initial_velocity
+    detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
+    position = np.zeros((1,7))
+    NUMBER_OF_JOINTS = 7
+    position[0,:6] = detailed_trajectory.item().get('q')[0,:]
+    velocity = np.zeros((1,7))
+    velocity[0,:6] = detailed_trajectory.item().get('qd')[0,:]
+    print(np.shape(velocity))
+    current_time = np.zeros((1,NUMBER_OF_JOINTS))
+    dt = 0.5
+    acceleration = np.zeros((1,7)) 
     
+    position_detailed = detailed_trajectory.item().get('q')
+    velocity_detailed = detailed_trajectory.item().get('qd')
+    print(velocity_detailed[0])
+
+    t_detailed = detailed_trajectory.item().get('t')
+
+    waypoint = arm_client.create_zero_waypoint()
+
+    # Plot position
+
+    optimizer_raw_data = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_opt_info.npy', allow_pickle=True)
+    acceleration_opt = optimizer_raw_data.item().get('ka')
+    fail_flag_opt = optimizer_raw_data.item().get('fail_flag')
+    print(fail_flag_opt)
+    # print(optimizer_raw_data)
+    t_opt = optimizer_raw_data.item().get('plan_time_curr')
+    print(np.shape(t_opt))
+    waypoint = np.zeros((len(t_opt), 4, num_joints))
+
+
+    for i in (range(len(t_opt))):
+        if i < 39:
+            if fail_flag_opt[i] == 0:
+                acceleration[0,:6] = acceleration_opt[i,:]
+                position += velocity * dt + (0.5*acceleration*dt*dt)  # s = s + v*t
+                velocity += dt * acceleration
+            else: 
+                acceleration = -velocity / dt  # Since velocity is set to 0, this works to decelerate to 0
+                velocity = np.zeros([1,NUMBER_OF_JOINTS])
+                position += velocity * dt + (0.5*acceleration*dt*dt)  # s = s + v*t
+
+        current_time += np.ones((1,num_joints))*dt
+        waypoint[i, 0, :] = current_time
+        waypoint[i, 1, :] = position
+        waypoint[i, 2, :] = velocity
+        waypoint[i, 3, :] = acceleration
+    # print(waypoint)
+    # arm_client.move_to(waypoint)
     
-    detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_detailed_traj.npy', allow_pickle=True)
+    fig, axes = plt.subplots(3, 2, figsize=(12, 10))  # 3 rows, 2 columns for 6 joints
+
+    # Flatten the axes array to easily index the subplots
+    axes = axes.flatten()
+
+    # Plot data for each joint (you have 6 joints, so 6 subplots)
+    for joint_index in range(6):  # Assuming there are 6 joints (0-based indexing)
+        time_data = waypoint[:, 0, :]  # Time data (same for all joints)
+        position_data = waypoint[:, 1, joint_index]  # Position data for the selected joint
+        
+        # Select the appropriate axis (subplot) for this joint
+        ax = axes[joint_index]
+
+        # Plot the data for this joint on the selected axis
+        ax.plot(time_data, position_data, label=f'Actual Trajectorys')
+        ax.plot(t_detailed, position_detailed[:,joint_index], label=f'Desired Trajectory', color='red', linestyle='--')
+
+        # Adding labels and title
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Position (m)')
+        ax.set_title(f'Joint {joint_index + 1} Position vs Time')
+        ax.legend(loc='best')
+        ax.grid(True)
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+
+
+ 
+
+
+def update_trajectory_with_optimizer():
+    
+    detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
     initial_position = detailed_trajectory.item().get('q')[0]
     initial_velocity = detailed_trajectory.item().get('qd')[0]
+    # initial_position = np.array([-7.85391618e-01,  1.00065447e-02, -1.22795596e-09, -1.16367514e-07, 0.00000000e+00,  5.00065426e-02])
+    # initial_velocity = np.array([ 1.30899533e-03,  1.30893494e-03, -2.45591220e-07, -2.32735029e-05, 0.00000000e+00,  1.30852094e-03])
 
     dt = 0.5
     num_joints = 7
     current_time = np.zeros((1,num_joints))
     position = np.zeros((1, num_joints))   
     position[0,:6] = initial_position
-    print(position)
     velocity = np.zeros((1, num_joints))  
     velocity[0,:6] = initial_velocity
-    print(velocity)
     acceleration = np.zeros((1, num_joints)) 
-    print(acceleration)
+    
     # Start loop to periodically get optimizer data and update trajectory
-    while True:
+
+
+    optimizer_data = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_opt_info.npy', allow_pickle=True)
+    # print(optimizer_data)
+    fail_flag = optimizer_data.item().get('fail_flag')
+
+    for i in range(len(fail_flag)):
         """
         TODO: 
         - make a rosnode to publish the data from the optimizer
@@ -140,32 +234,32 @@ def update_trajectory_with_optimizer(desired_position, initial_position, max_vel
         - compare with the original trajectory 
         - code to match with the repo and make it pretty.
         """
-        optimizer_data = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_opt_info.npy', allow_pickle=True)
-        print(optimizer_data)
-        fail_flag = optimizer_data.item().get('fail_flag')
 
-        if fail_flag[-1] != 0:
-            acceleration[:6] = optimizer_data.item().get('ka')  # Update acceleration from optimizer
-        # else:
-        #     velocity = np.zeros((1,num_joints))  # Stop robot if no data - breaking
-        print(np.shape(position))
-        print(np.shape(velocity))
-        print(np.shape(acceleration))
-        print(velocity)
-        print(position)
+        if fail_flag[i] == 0:
+            acceleration[0,:6] = optimizer_data.item().get('ka')[i]  # Update acceleration from optimizer
+            # print(acceleration)
+            velocity += dt * acceleration   # v = u + at
+            position += velocity * dt  # s = s + v*t
+            # print(np.shape(acceleration))
+            # print(np.shape(velocity))
+            # print(np.shape(position))
+
+        else:
+            acceleration[0,:6] = np.zeros((1,6))  # Update acceleration from optimizer
+            velocity = np.zeros((1,num_joints))  # Stop robot if no data - breaking
+            position += velocity * dt  # s = s + v*t
+
 
         # Update position and velocity using piecewise linear acceleration
-        velocity += dt * acceleration   # v = u + at
-        position += velocity * dt  # s = s + v*t
 
         """
-        TODO : DONE [11/21/24]
+        TODO : DONE 
         - concatenate these objects and make it similiar to the waypoints matrix 
         - implement move to at every second
         """
 
         # Wait for the next interval
-        time.sleep(dt)
+        # time.sleep(dt)
         current_time += np.ones((1,num_joints))*dt
         arm_waypoints = arm_client.create_zero_waypoint()        
         arm_waypoints[:, 0, :] = current_time
@@ -176,13 +270,15 @@ def update_trajectory_with_optimizer(desired_position, initial_position, max_vel
         # print(arm_waypoints)
         arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
         # print(np.shape(arm_waypoints))
-        arm_client.move_to(arm_waypoints, False)
+    # print(arm_waypoints)
+    arm_client.move_to(arm_waypoints, False)
+
+detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
+initial_position = np.array([-7.85391618e-01,  1.00065447e-02, -1.22795596e-09, -1.16367514e-07, 0.00000000e+00,  5.00065426e-02])
+initial_velocity = np.array([ 1.30899533e-03,  1.30893494e-03, -2.45591220e-07, -2.32735029e-05, 0.00000000e+00,  1.30852094e-03])
 
 
-detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_detailed_traj.npy', allow_pickle=True)
-initial_position = detailed_trajectory.item().get('q')[0]
-initial_velocity = detailed_trajectory.item().get('qd')[0]
-dt = 0.5
+dt = 0.5 
 num_joints = 7
 current_time = np.zeros((1,num_joints))
 position = np.zeros((1, num_joints))   
@@ -190,29 +286,74 @@ position[0,:6] = initial_position
 velocity = np.zeros((1, num_joints))  
 velocity[0,:6] = initial_velocity
 acceleration = np.zeros((1, num_joints)) 
+current_time = np.ones((1,num_joints))
+
 
 def optimizer_callback(msg):
-    global velocity, position, current_time
-    print("1")
+    global velocity, position, current_time, dt, acceleration, num_joints
 
-    ka = msg.ka.data
-    fail_flag = msg.fail_flag.data 
+    ka = np.array(msg.ka.data)
+    fail_flag = np.array(msg.fail_flag.data)
     
-    if fail_flag == 0: 
-        acceleration[0,:6] = ka
+    if fail_flag == 0:
+        acceleration[0, :6] = np.array(ka)
     
-    velocity += dt * acceleration   # v = u + at
-    position += velocity * dt  # s = s + v*t
-
-    time.sleep(dt)
-    current_time += np.ones((1,num_joints))*dt
-    arm_waypoints = arm_client.create_zero_waypoint()        
+    # Integration steps
+    integration_discretization = 10  # You can adjust this value
+    t = dt / integration_discretization
+    
+    # Acceleration interpolation (assuming constant acceleration for simplicity)
+    qdd = np.tile(acceleration, (integration_discretization, 1))
+    # print(qdd)
+    # Velocity update
+    qd_delt = np.cumsum(qdd * t, axis=0)
+    velocity = velocity + qd_delt[-1]
+    # print(velocity)
+    
+    # Position update
+    position_update = np.cumsum(0.5 * qdd * t * t, axis=0)
+    position += position_update[-1]
+    position += np.cumsum(velocity * t)
+    print(position)
+    # Update arm waypoints
+    arm_waypoints = arm_client.current_waypoint()
+    current_time = np.ones((1, num_joints)) * dt
     arm_waypoints[:, 0, :] = current_time
     arm_waypoints[:, 1, :] = position
     arm_waypoints[:, 2, :] = velocity
-    arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
-    print(arm_waypoints)
+    arm_waypoints[:, 3, :] = acceleration
+
+    arm_waypoints = np.concatenate([arm_waypoints], axis=0)
+    
     arm_client.move_to(arm_waypoints, False)
+    arm_client.client.wait_for_result()
+
+
+    ############### PREVIOUS METHOD ###################
+    # global velocity, position, current_time
+    # print("1")
+
+    # ka = msg.ka.data
+    # fail_flag = msg.fail_flag.data 
+    
+    # if fail_flag == 0: 
+    #     acceleration[0,:6] = ka
+    
+    # velocity += dt * acceleration   # v = u + at
+    # position += velocity * dt + (0.5 * acceleration * (dt*dt))  # s = s + v*t + 1/2 * a * t^2
+
+    # time.sleep(dt)
+    # current_time += np.ones((1,num_joints))*dt
+    # arm_waypoints = arm_client.create_zero_waypoint()        
+    # arm_waypoints[:, 0, :] = current_time
+    # arm_waypoints[:, 1, :] = position
+    # arm_waypoints[:, 2, :] = velocity
+    # arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
+    # print(arm_waypoints)
+    # arm_client.move_to(arm_waypoints, False)
+
+
+
 
 
 if __name__ == '__main__':
@@ -245,13 +386,24 @@ if __name__ == '__main__':
     config['data_end'] = config['data_start'] + config['joints_num']
     arm_client = FollowTrajectoryClient('arm_controller/follow_joint_trajectory', arm_joint_names, config)
 
-    while not (arm_client.ready and torso_client.ready):
-        rospy.sleep(0.1)
+    # while not (arm_client.ready and torso_client.ready):
+    #     rospy.sleep(0.1)
+
+    # arm_waypoints = arm_client.create_zero_waypoint()
+    # arm_waypoints[:, 0, :] = 5.
+    # arm_waypoints[:, 1, :] = np.array([-7.85391618e-01,  1.00065447e-02, -1.22795596e-09, -1.16367514e-07, 0.00000000e+00,  5.00065426e-02, 0.0])
+    # arm_waypoints[:, 2, :] = 0.
+    # rospy.loginfo("Moving arm to safe position...")
+    # arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
+    # arm_client.move_to(arm_waypoints, False)
 
 
-    rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
-    rospy.loginfo("JointStateMessage Subscriber started.")
-    rospy.spin()
+    # update_trajectory_with_optimizer()
+    plot_trajectory()
+
+    # rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
+    # rospy.loginfo("JointStateMessage Subscriber started.")
+    # rospy.spin()
 
     # # Move torso up!
     # torso_time = np.ones((1, 1, torso_client.config['joints_num'])) * 4
@@ -262,22 +414,19 @@ if __name__ == '__main__':
     # torso_waypoints = np.concatenate([torso_client.current_waypoint(), torso_waypoints], axis=0)
     # #torso_client.move_to(torso_waypoints, False)
 
-    # # Move ARM to save position
-    # arm_waypoints = arm_client.create_zero_waypoint()
-    # arm_waypoints[:, 0, :] = 5.
-    # arm_waypoints[:, 1, :] = np.array([1.32, 0, -1.57, 1.72, 0.0, 1.66, 0.0])
-    # arm_waypoints[:, 2, :] = 0.
-    # rospy.loginfo("Moving arm to safe position...")
-    # arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
-    # #arm_client.move_to(arm_waypoints, False)
+    # Move ARM to save position
 
-    # arm_waypoints = arm_client.create_zero_waypoint()
-    # arm_waypoints[:, 0, :] = 4.
-    # arm_waypoints[:, 1, :] = np.array([0, 0, -1.57, 1.72, 0.0, 0.0, 0.0])
-    # arm_waypoints[:, 2, :] = 0.
-    # arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
+   
+   
+    # waypoints = [ -7.33666804e-01,  6.17267145e-02,  2.65324995e-05,  1.77717785e-03, 0.00000000e+00,  5.29565542e-02,  0.00000000e+00 ]
 
-    # arm_client.move_to(arm_waypoints, False)
+    # for point in waypoints:
+    #     arm_waypoints = arm_client.create_zero_waypoint()
+    #     arm_waypoints[:, 0, :] = 4.  # Duration (adjust if necessary)
+    #     arm_waypoints[:, 1, :] = np.array(point)  # Set waypoint position
+    #     arm_waypoints[:, 2, :] = 0.  # Velocity (or keep as is)
+    #     arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
+    #     arm_client.move_to(arm_waypoints, False)  # Execute movement
 
     # # Move joints independently using simulation!!
     # rospy.loginfo("Moving joints independently...")

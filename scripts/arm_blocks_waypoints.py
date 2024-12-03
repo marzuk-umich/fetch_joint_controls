@@ -205,6 +205,6 @@ if __name__ == '__main__':
 
 
 
-    data = np.load('fetch_joint_controls/scripts/center_box_avoidance_output_traj.npy')
+    data = np.load('fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_output_traj.npy')
 
     arm_client.move_to(data, False)

@@ -34,7 +34,7 @@ def publish_joint_data(file_path):
     t,fail_flag, q, qd, qdd = load_data(file_path)
 
 
-    rate = rospy.Rate(50)  # Publish every 2 seconds (0.5 Hz)
+    rate = rospy.Rate(0.5)  # Publish every 2 seconds (0.5 Hz)
     msg = optimizerMessage()
     for i in range(len(t)):
         print(i)

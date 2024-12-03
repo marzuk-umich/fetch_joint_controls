@@ -37,6 +37,7 @@ def generate_trajectory(desired_position, initial_position, max_vel, total_time)
         [0, 0, 2, 0, 0, 0],
         [0, 0, 2, 6*total_time, 12*total_time**2, 20*total_time**3]
     ])
+    # print(initial_position, desired_position)
     B = np.array([
         initial_position, 
         desired_position, 
@@ -56,11 +57,11 @@ def generate_trajectory(desired_position, initial_position, max_vel, total_time)
     print("acceleration:", np.shape(acceleration))
     
     # Clip maximum velocity and recompute with new time if necessary
-    if np.max(np.abs(velocity)) > max_vel:
-        print("Trimimng velocity")
-        max_acc = np.max(np.abs(acceleration))
-        total_time = (desired_position - initial_position) / max_vel + max_vel / max_acc
-        return generate_trajectory(desired_position, initial_position, max_vel, total_time)
+    # if np.max(np.abs(velocity)) > max_vel:
+    #     print("Trimimng velocity")
+    #     max_acc = np.max(np.abs(acceleration))
+    #     total_time = (desired_position - initial_position) / max_vel + max_vel / max_acc
+    #     return generate_trajectory(desired_position, initial_position, max_vel, total_time)
 
 
     # # Position
