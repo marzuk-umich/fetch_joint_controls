@@ -110,8 +110,8 @@ def test_joints_independently(arm_client):
 def plot_trajectories(t_des, x_des, v_des, t_real, x_real, v_real):
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10, 7))
     # Plot position
-    ax1.plot(t_des, x_des, 'r-', label='Desired')
-    ax1.plot(t_real, x_real, 'b-', label='Real')
+    ax1.plot(t_des, x_des, 'r--', label='Optimizer Data')
+    ax1.plot(t_real, x_real, 'b--', label='Computed Data')
     ax1.set_title('Position vs. Time')
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Position (rad)')
@@ -119,8 +119,8 @@ def plot_trajectories(t_des, x_des, v_des, t_real, x_real, v_real):
     ax1.grid(True)
 
     # Plot velocity
-    ax2.plot(t_des, v_des, 'r-', label='Desired')
-    ax2.plot(t_real, v_real, 'b-', label='Real')
+    ax2.plot(t_des, v_des,  'r--', label='Optimizer Data')
+    ax2.plot(t_real, v_real, 'b--', label='Computed Data')
     ax2.set_title('Angular velocity vs. Time')
     ax2.set_xlabel('Time (s)')
     ax2.set_ylabel('Velocity (rad/s)')
@@ -131,4 +131,77 @@ def plot_trajectories(t_des, x_des, v_des, t_real, x_real, v_real):
     plt.tight_layout()
 
     # Display the plots
+    plt.show()
+
+
+
+
+
+def plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data, index):
+        # Create subplots
+    fig, axes = plt.subplots(3, 2, figsize=(12, 10))
+    axes = axes.flatten()
+
+    # Joint 1
+    ax = axes[0]
+    time_data = waypoint[:, 0, 0]
+    required_data = waypoint[:, index, 0]
+    ax.plot(time_data, required_data, 'r--', label='Optimizer Data', color="red")
+    ax.plot(t_detailed, detailed_data[:, 0], 'b--', label='Computed Data', color="blue")
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Position (radians)')
+    ax.set_title('Joint 1 Position vs Time')
+    ax.legend()
+
+    ax = axes[1]
+    required_data = waypoint[:, index, 1]
+    ax.plot(time_data, required_data, 'r--', label='Optimizer Data', color="red")
+    ax.plot(t_detailed, detailed_data[:, 1], 'b--', label='Computed Data', color="blue")
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Position (radians)')
+    ax.set_title('Joint 2 Position vs Time')
+    ax.legend()
+
+    # Joint 3
+    ax = axes[2]
+    required_data = waypoint[:, index, 2]
+    ax.plot(time_data, required_data, 'r--', label='Optimizer Data', color="red")
+    ax.plot(t_detailed, detailed_data[:, 2], 'b--', label='Computed Data', color="blue")
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Position (radians)')
+    ax.set_title('Joint 3 Position vs Time')
+    ax.legend()
+
+    # Joint 4
+    ax = axes[3]
+    required_data = waypoint[:, index, 3]
+    ax.plot(time_data, required_data, 'r--', label='Optimizer Data', color="red")
+    ax.plot(t_detailed, detailed_data[:, 3], 'b--', label='Computed Data', color="blue")
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Position (radians)')
+    ax.set_title('Joint 4 Position vs Time')
+    ax.legend()
+
+    # Joint 5
+    ax = axes[4]
+    required_data = waypoint[:, index, 4]
+    ax.plot(time_data, required_data, 'r--', label='Optimizer Data', color="red")
+    ax.plot(t_detailed, detailed_data[:, 4], 'b--', label='Computed Data', color="blue")
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Position (radians)')
+    ax.set_title('Joint 5 Position vs Time')
+    ax.legend()
+
+    # Joint 6
+    ax = axes[5]
+    required_data = waypoint[:, index, 5]
+    ax.plot(time_data, required_data, 'r--', label='Optimizer Data', color="red")
+    ax.plot(t_detailed, detailed_data[:, 5], 'b--', label='Computed Data', color="blue")
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Position (radians)')
+    ax.set_title('Joint 6 Position vs Time')
+    ax.legend()
+
+    # Adjust layout
+    plt.tight_layout()
     plt.show()

@@ -115,6 +115,7 @@ class FollowTrajectoryClient(object):
 
 
 def plot_trajectory():
+    from test_joints import plot_trajectories_with_optimizer
     global initial_position, initial_velocity
     detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
     position = np.zeros((1,7))
@@ -129,6 +130,8 @@ def plot_trajectory():
     
     position_detailed = detailed_trajectory.item().get('q')
     velocity_detailed = detailed_trajectory.item().get('qd')
+    acceleration_detailed = detailed_trajectory.item().get('qdd')
+
     print(velocity_detailed[0])
 
     t_detailed = detailed_trajectory.item().get('t')
@@ -164,38 +167,13 @@ def plot_trajectory():
         waypoint[i, 2, :] = velocity
         waypoint[i, 3, :] = acceleration
     # print(waypoint)
-    # arm_client.move_to(waypoint)
+    arm_client.move_to(waypoint)    
     
-    fig, axes = plt.subplots(3, 2, figsize=(12, 10))  # 3 rows, 2 columns for 6 joints
-
-    # Flatten the axes array to easily index the subplots
-    axes = axes.flatten()
-
-    # Plot data for each joint (you have 6 joints, so 6 subplots)
-    for joint_index in range(6):  # Assuming there are 6 joints (0-based indexing)
-        time_data = waypoint[:, 0, :]  # Time data (same for all joints)
-        position_data = waypoint[:, 1, joint_index]  # Position data for the selected joint
-        
-        # Select the appropriate axis (subplot) for this joint
-        ax = axes[joint_index]
-
-        # Plot the data for this joint on the selected axis
-        ax.plot(time_data, position_data, label=f'Actual Trajectorys')
-        ax.plot(t_detailed, position_detailed[:,joint_index], label=f'Desired Trajectory', color='red', linestyle='--')
-
-        # Adding labels and title
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Position (m)')
-        ax.set_title(f'Joint {joint_index + 1} Position vs Time')
-        ax.legend(loc='best')
-        ax.grid(True)
-
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
-
-    # Show the plot
-    plt.show()
-
+    
+    #index = 1 -> position
+    #index = 2 -> velocity
+    #index = 3 -> acceleration
+    plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data=position_detailed, index=1 ) 
 
  
 
