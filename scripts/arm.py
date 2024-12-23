@@ -12,7 +12,9 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import threading 
 import time 
 from fetch_joint_controls.msg import traj_opt
-    
+from scipy.interpolate import interp1d
+from test_joints import plot_trajectories_with_optimizer, generate_smoothened_trajectory
+
 class FollowTrajectoryClient(object):
 
     def __init__(self, name, joint_names, config):
@@ -43,7 +45,6 @@ class FollowTrajectoryClient(object):
             trajectory.points[i].positions = waypoints[i, 1, :]
             trajectory.points[i].velocities = waypoints[i, 2, :]
             trajectory.points[i].accelerations =  waypoints[i, 3, :]
-            # print(trajectory.points[i].accelerations)
         follow_goal = FollowJointTrajectoryGoal()
         follow_goal.trajectory = trajectory
         follow_goal.goal_time_tolerance = rospy.Duration(0.0)
@@ -113,6 +114,63 @@ class FollowTrajectoryClient(object):
         self.time_recordings = np.array(self.time_recordings)
         self.time_recordings -= arm_client.time_recordings[0]
 
+def plot_smoothened_joint_trajectory():
+    global initial_position, initial_velocity
+
+    detailed_trajectory     = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
+    optimizer_raw_data      = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_opt_info.npy', allow_pickle=True)
+    NUMBER_OF_JOINTS        = 7
+    dt                      = 0.5
+    current_time            = np.zeros((1,NUMBER_OF_JOINTS))
+    acceleration            = np.zeros((1,7)) 
+    velocity                = np.zeros((1,7))
+    position                = np.zeros((1,7))    
+    t_detailed              = detailed_trajectory.item().get('t')
+    position_detailed       = detailed_trajectory.item().get('q')
+    velocity_detailed       = detailed_trajectory.item().get('qd')
+    acceleration_detailed   = detailed_trajectory.item().get('qdd')
+    acceleration_opt        = optimizer_raw_data.item().get('ka')
+    position[0,:6]          = detailed_trajectory.item().get('q')[0,:]
+    velocity[0,:6]          = detailed_trajectory.item().get('qd')[0,:]
+    fail_flag_opt           = optimizer_raw_data.item().get('fail_flag')
+    t_opt                   = optimizer_raw_data.item().get('plan_time_curr')
+    waypoint                = arm_client.create_zero_waypoint()
+    waypoint                = np.zeros((len(t_opt), 4, NUMBER_OF_JOINTS))
+
+
+    for i in (range(len(t_opt))):
+        if i < 39:
+            if fail_flag_opt[i] == 0:
+                acceleration[0,:6] = acceleration_opt[i,:]
+                position += velocity * dt + (0.5*acceleration*dt*dt)  # s = s + v*t
+                velocity += dt * acceleration
+            else: 
+                acceleration = -velocity / dt  # Since velocity is set to 0, this works to decelerate to 0
+                velocity = np.zeros([1,NUMBER_OF_JOINTS])
+                position += velocity * dt + (0.5*acceleration*dt*dt)  # s = s + v*t
+
+        current_time += np.ones((1,NUMBER_OF_JOINTS))*dt
+        waypoint[i, 0, :] = current_time
+        waypoint[i, 1, :] = position
+        waypoint[i, 2, :] = velocity
+        waypoint[i, 3, :] = acceleration
+    # arm_client.move_to(waypoint)    
+    fine_tuned_time_data ,fine_tuned_position_data, fine_tuned_velocity_data, fine_tuned_acceleration_data = generate_smoothened_trajectory(waypoint[:, 0, :], waypoint[:, 1, :], waypoint[:, 2, :], waypoint[:, 3, :])
+    waypoint = np.zeros((1000, 4, NUMBER_OF_JOINTS))
+
+    print(np.shape(waypoint[:, 0, :]))
+    waypoint[:, 0, :] = fine_tuned_time_data
+    waypoint[:, 1, :] = fine_tuned_position_data
+    waypoint[:, 2, :] = fine_tuned_velocity_data
+    # waypoint[:, 3, :] = fine_tuned_acceleration_data
+    arm_client.move_to(waypoint)
+    #index = 1 -> position
+    #index = 2 -> velocity
+    #index = 3 -> acceleration
+    # plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data=position_detailed, index=1 ) 
+        
+
+
 
 def plot_trajectory():
     from test_joints import plot_trajectories_with_optimizer
@@ -147,7 +205,7 @@ def plot_trajectory():
     # print(optimizer_raw_data)
     t_opt = optimizer_raw_data.item().get('plan_time_curr')
     print(np.shape(t_opt))
-    waypoint = np.zeros((len(t_opt), 4, num_joints))
+    waypoint = np.zeros((len(t_opt), 4, NUMBER_OF_JOINTS))
 
 
     for i in (range(len(t_opt))):
@@ -161,7 +219,7 @@ def plot_trajectory():
                 velocity = np.zeros([1,NUMBER_OF_JOINTS])
                 position += velocity * dt + (0.5*acceleration*dt*dt)  # s = s + v*t
 
-        current_time += np.ones((1,num_joints))*dt
+        current_time += np.ones((1,NUMBER_OF_JOINTS))*dt
         waypoint[i, 0, :] = current_time
         waypoint[i, 1, :] = position
         waypoint[i, 2, :] = velocity
@@ -175,96 +233,9 @@ def plot_trajectory():
     #index = 3 -> acceleration
     plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data=position_detailed, index=1 ) 
 
+
  
 
-
-def update_trajectory_with_optimizer():
-    
-    detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
-    initial_position = detailed_trajectory.item().get('q')[0]
-    initial_velocity = detailed_trajectory.item().get('qd')[0]
-    # initial_position = np.array([-7.85391618e-01,  1.00065447e-02, -1.22795596e-09, -1.16367514e-07, 0.00000000e+00,  5.00065426e-02])
-    # initial_velocity = np.array([ 1.30899533e-03,  1.30893494e-03, -2.45591220e-07, -2.32735029e-05, 0.00000000e+00,  1.30852094e-03])
-
-    dt = 0.5
-    num_joints = 7
-    current_time = np.zeros((1,num_joints))
-    position = np.zeros((1, num_joints))   
-    position[0,:6] = initial_position
-    velocity = np.zeros((1, num_joints))  
-    velocity[0,:6] = initial_velocity
-    acceleration = np.zeros((1, num_joints)) 
-    
-    # Start loop to periodically get optimizer data and update trajectory
-
-
-    optimizer_data = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_opt_info.npy', allow_pickle=True)
-    # print(optimizer_data)
-    fail_flag = optimizer_data.item().get('fail_flag')
-
-    for i in range(len(fail_flag)):
-        """
-        TODO: 
-        - make a rosnode to publish the data from the optimizer
-        - data to be published for each discrete time interval and not just dump the data 
-        - subscribe to the node at 0.5 sec
-        - record video of the points
-        - compare with the original trajectory 
-        - code to match with the repo and make it pretty.
-        """
-
-        if fail_flag[i] == 0:
-            acceleration[0,:6] = optimizer_data.item().get('ka')[i]  # Update acceleration from optimizer
-            # print(acceleration)
-            velocity += dt * acceleration   # v = u + at
-            position += velocity * dt  # s = s + v*t
-            # print(np.shape(acceleration))
-            # print(np.shape(velocity))
-            # print(np.shape(position))
-
-        else:
-            acceleration[0,:6] = np.zeros((1,6))  # Update acceleration from optimizer
-            velocity = np.zeros((1,num_joints))  # Stop robot if no data - breaking
-            position += velocity * dt  # s = s + v*t
-
-
-        # Update position and velocity using piecewise linear acceleration
-
-        """
-        TODO : DONE 
-        - concatenate these objects and make it similiar to the waypoints matrix 
-        - implement move to at every second
-        """
-
-        # Wait for the next interval
-        # time.sleep(dt)
-        current_time += np.ones((1,num_joints))*dt
-        arm_waypoints = arm_client.create_zero_waypoint()        
-        arm_waypoints[:, 0, :] = current_time
-        # print(arm_waypoints[:,0,:])
-        arm_waypoints[:, 1, :] = position
-        # print(arm_waypoints[:,1,:])
-        arm_waypoints[:, 2, :] = velocity
-        # print(arm_waypoints)
-        arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
-        # print(np.shape(arm_waypoints))
-    # print(arm_waypoints)
-    arm_client.move_to(arm_waypoints, False)
-
-detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
-initial_position = np.array([-7.85391618e-01,  1.00065447e-02, -1.22795596e-09, -1.16367514e-07, 0.00000000e+00,  5.00065426e-02])
-initial_velocity = np.array([ 1.30899533e-03,  1.30893494e-03, -2.45591220e-07, -2.32735029e-05, 0.00000000e+00,  1.30852094e-03])
-
-
-dt = 0.5 
-num_joints = 7
-current_time = np.zeros((1,num_joints))
-position = np.zeros((1, num_joints))   
-position[0,:6] = initial_position
-velocity = np.zeros((1, num_joints))  
-velocity[0,:6] = initial_velocity
-acceleration = np.zeros((1, num_joints)) 
-current_time = np.ones((1,num_joints))
 
 
 def optimizer_callback(msg):
@@ -292,7 +263,6 @@ def optimizer_callback(msg):
     position_update = np.cumsum(0.5 * qdd * t * t, axis=0)
     position += position_update[-1]
     position += np.cumsum(velocity * t)
-    print(position)
     # Update arm waypoints
     arm_waypoints = arm_client.current_waypoint()
     current_time = np.ones((1, num_joints)) * dt
@@ -378,6 +348,7 @@ if __name__ == '__main__':
 
     # update_trajectory_with_optimizer()
     plot_trajectory()
+    # plot_single_joint_trajectory()
 
     # rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
     # rospy.loginfo("JointStateMessage Subscriber started.")
