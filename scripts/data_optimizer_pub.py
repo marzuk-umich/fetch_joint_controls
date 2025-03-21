@@ -32,15 +32,17 @@ def publish_joint_data(file_path):
     ka, fail_flag, t = load_data(file_path)
 
 
-    rate = rospy.Rate(2)  # Publish every 2 seconds (0.5 Hz)
+    # rate = rospy.Rate(0.1)  # Publish every 2 seconds (0.5 Hz)
     msg = traj_opt()
     for i in range(len(t)):
-        print(i)
+        
         msg.t = Float32(data=t[i])
         msg.ka = Float32MultiArray(data=ka[i,:].tolist())
         msg.fail_flag = Float32(data=fail_flag[i])
-        rate.sleep()
+        # rate.sleep()
+        print(msg.t)
         pub.publish(msg)
+        time.sleep(4)
 
 if __name__ == "__main__":
     file_path =  np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_opt_info.npy', allow_pickle=True)

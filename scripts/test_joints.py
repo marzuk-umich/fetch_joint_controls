@@ -46,7 +46,7 @@ def generate_smoothened_trajectory(time_data, position_data, velocity_data, acce
 
 
 
-    plt.figure(figsize=(14, 8))
+    # plt.figure(figsize=(14, 8))
     for joint in range(joints):
         # Interpolate the position data
         interp_func = interp1d(time, position_data[:, joint], kind='cubic')
@@ -55,7 +55,7 @@ def generate_smoothened_trajectory(time_data, position_data, velocity_data, acce
 
         # Calculate velocity (first derivative)
         velocity_data_fine[:, joint] = np.diff(fine_tuned_position_data[:, joint]) / np.diff(time_fine)
-        print(np.shape(np.diff(time_fine[:-1])))
+        # print(np.shape(np.diff(time_fine[:-1])))
 
         # Calculate acceleration (second derivative)
         acceleration_data_fine[:, joint] = np.diff(velocity_data_fine[:, joint]) / np.diff(time_fine[:-1])
@@ -63,18 +63,18 @@ def generate_smoothened_trajectory(time_data, position_data, velocity_data, acce
         # Store fine-tuned position data
         
 
-        # Plot original, interpolated, and fitted data
-        plt.subplot(3, 3, joint + 1)
-        plt.plot(time, velocity_data[:, joint], 'o', label='Original Data', markersize=4)
-        plt.plot(time_fine[:-1], velocity_data_fine[:, joint], '--', label='Interpolated', linewidth=1)
-        plt.xlabel('Time (s)')
-        plt.ylabel('Position (rad)')
-        plt.title(f'Joint {joint}')
-        plt.legend()
-        plt.tight_layout()
+        # # Plot original, interpolated, and fitted data
+        # plt.subplot(3, 3, joint + 1)
+        # plt.plot(time, velocity_data[:, joint], 'o', label='Original Data', markersize=4)
+        # plt.plot(time_fine[:-1], velocity_data_fine[:, joint], '--', label='Interpolated', linewidth=1)
+        # plt.xlabel('Time (s)')
+        # plt.ylabel('Position (rad)')
+        # plt.title(f'Joint {joint}')
+        # plt.legend()
+        # plt.tight_layout()
 
-    plt.suptitle("Position-Time Graphs with Discretization and Curve Fitting", y=1.02)
-    plt.show()
+    # plt.suptitle("Position-Time Graphs with Discretization and Curve Fitting", y=1.02)
+    # plt.show()
     velocity_data_fine      = np.vstack((velocity_data_fine, zeros_row))
     acceleration_data_fine  = np.vstack((acceleration_data_fine, zeros_row))
     acceleration_data_fine  = np.vstack((acceleration_data_fine, zeros_row))
@@ -147,7 +147,7 @@ def plot_trajectories(t_des, x_des, v_des, t_real, x_real, v_real):
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10, 7))
     # Plot position
     ax1.plot(t_des, x_des, 'r--', label='Optimizer Data')
-    ax1.plot(t_real, x_real, 'b--', label='Computed Data')
+    ax1.plot(t_real, x_real, 'b--', label='trajectory_traced')
     ax1.set_title('Position vs. Time')
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Position (rad)')
@@ -156,7 +156,7 @@ def plot_trajectories(t_des, x_des, v_des, t_real, x_real, v_real):
 
     # Plot velocity
     ax2.plot(t_des, v_des,  'r--', label='Optimizer Data')
-    ax2.plot(t_real, v_real, 'b--', label='Computed Data')
+    ax2.plot(t_real, v_real, 'b--', label='trajectory_traced')
     ax2.set_title('Angular velocity vs. Time')
     ax2.set_xlabel('Time (s)')
     ax2.set_ylabel('Velocity (rad/s)')
@@ -178,63 +178,71 @@ def plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data, index)
     fig, axes = plt.subplots(3, 2, figsize=(12, 10))
     axes = axes.flatten()
 
+    if index == 1:
+        ylabel = 'Position (radians)'
+    elif index == 2:
+        ylabel = 'Velocity (radians/second)'
+    elif index == 3:
+        ylabel = 'Acceleration (radians/second^2)'
+
+
     # Joint 1
     ax = axes[0]
     time_data = waypoint[:, 0, 0]
     required_data = waypoint[:, index, 0]
-    ax.plot(time_data, required_data, 'r--', label='Computed Data', color="red")
+    ax.plot(time_data, required_data, 'r--', label='trajectory_traced', color="red")
     ax.plot(t_detailed, detailed_data[:, 0], 'b--', label='Optimizer Data', color="blue")
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Position (radians)')
+    ax.set_ylabel(ylabel)
     ax.set_title('Joint 1 Position vs Time')
     ax.legend()
 
     ax = axes[1]
     required_data = waypoint[:, index, 1]
-    ax.plot(time_data, required_data, 'r--', label='Computed Data', color="red")
+    ax.plot(time_data, required_data, 'r--', label='trajectory_traced', color="red")
     ax.plot(t_detailed, detailed_data[:, 1], 'b--', label='Optimizer Data', color="blue")
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Position (radians)')
+    ax.set_ylabel(ylabel)
     ax.set_title('Joint 2 Position vs Time')
     ax.legend()
 
     # Joint 3
     ax = axes[2]
     required_data = waypoint[:, index, 2]
-    ax.plot(time_data, required_data, 'r--', label='Computed Data', color="red")
+    ax.plot(time_data, required_data, 'r--', label='trajectory_traced', color="red")
     ax.plot(t_detailed, detailed_data[:, 2], 'b--', label='Optimizer Data', color="blue")
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Position (radians)')
+    ax.set_ylabel(ylabel)
     ax.set_title('Joint 3 Position vs Time')
     ax.legend()
 
     # Joint 4
     ax = axes[3]
     required_data = waypoint[:, index, 3]
-    ax.plot(time_data, required_data, 'r--', label='Computed Data', color="red")
+    ax.plot(time_data, required_data, 'r--', label='trajectory_traced', color="red")
     ax.plot(t_detailed, detailed_data[:, 3], 'b--', label='Optimizer Data', color="blue")
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Position (radians)')
+    ax.set_ylabel(ylabel)
     ax.set_title('Joint 4 Position vs Time')
     ax.legend()
 
     # Joint 5
     ax = axes[4]
     required_data = waypoint[:, index, 4]
-    ax.plot(time_data, required_data, 'r--', label='Computed Data', color="red")
+    ax.plot(time_data, required_data, 'r--', label='trajectory_traced', color="red")
     ax.plot(t_detailed, detailed_data[:, 4], 'b--', label='Optimizer Data', color="blue")
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Position (radians)')
+    ax.set_ylabel(ylabel)
     ax.set_title('Joint 5 Position vs Time')
     ax.legend()
 
     # Joint 6
     ax = axes[5]
     required_data = waypoint[:, index, 5]
-    ax.plot(time_data, required_data, 'r--', label='Computed Data', color="red")
+    ax.plot(time_data, required_data, 'r--', label='trajectory_traced', color="red")
     ax.plot(t_detailed, detailed_data[:, 5], 'b--', label='Optimizer Data', color="blue")
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Position (radians)')
+    ax.set_ylabel(ylabel)
     ax.set_title('Joint 6 Position vs Time')
     ax.legend()
 
