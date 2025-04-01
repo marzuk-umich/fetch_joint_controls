@@ -13,18 +13,6 @@ from scipy.interpolate import interp1d
 
 
 
-
-
-
-# # Parameters for the trajectory
-# desired_position = np.ones((7, 1)) * 10  # Example desired positions
-# initial_position = np.zeros((7, 1))  # Start at zero
-# max_vel = 2  # Maximum velocity (example)
-# total_time = 10  # Total time in seconds
-
-# update_trajectory_with_optimizer(desired_position, initial_position, max_vel, total_time)
-
-
 def poly5(x, a, b, c, d, e, f):
     return a*x**5 + b*x**4 + c*x**3 + d*x**2 + e*x + f
 

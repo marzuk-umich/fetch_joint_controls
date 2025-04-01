@@ -147,9 +147,9 @@ def plot_smoothened_joint_trajectory():
                 position += velocity * dt + (0.5*acceleration*dt*dt)  # s = s + v*t
                 velocity += dt * acceleration
             else: 
-                acceleration = -velocity / dt  # Since velocity is set to 0, this works to decelerate to 0
+                acceleration = -velocity / dt  
                 velocity = np.zeros([1,NUMBER_OF_JOINTS])
-                position += velocity * dt + (0.5*acceleration*dt*dt)  # s = s + v*t
+                position += velocity * dt + (0.5*acceleration*dt*dt)  # s = st + 0.5*v*t*t
 
         current_time += np.ones((1,NUMBER_OF_JOINTS))*dt
         waypoint[i, 0, :] = current_time
@@ -164,11 +164,16 @@ def plot_smoothened_joint_trajectory():
     waypoint[:, 0, :] = fine_tuned_time_data
     waypoint[:, 1, :] = fine_tuned_position_data
     waypoint[:, 2, :] = fine_tuned_velocity_data
-    # waypoint[:, 3, :] = fine_tuned_acceleration_data
+    waypoint[:, 3, :] = fine_tuned_acceleration_data
+    for i in range(np.shape(waypoint)[0]):
+        print(waypoint[i, :, :].shape)
+        print(rospy.Duration(waypoint[i, 0, 0]))
+
+    
     arm_client.move_to(waypoint)
-    #index = 1 -> position
-    #index = 2 -> velocity
-    #index = 3 -> acceleration
+    # index = 1 -> position
+    # index = 2 -> velocity
+    # index = 3 -> acceleration
     plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data=position_detailed, index=1 ) 
         
 
@@ -248,47 +253,66 @@ acceleration = np.zeros((1, num_joints))
 current_time = np.ones((1,num_joints))
 
 
+from collections import deque
+optimizer_queue = deque()
+
 def optimizer_callback(msg):
-    global velocity, position, current_time, dt, acceleration, num_joints
+    optimizer_queue.append({
+        'ka': np.array(msg.ka.data),
+        'fail_flag': msg.fail_flag.data,
+        'timestamp': msg.t.data
+    })
 
-    ka = np.array(msg.ka.data)
-    fail_flag = np.array(msg.fail_flag.data)
-    
-    if fail_flag == 0:
-        acceleration[0, :6] = np.array(ka)
-    
-    # Integration steps
-    integration_discretization = 10  # You can adjust this value
-    t = dt / integration_discretization
-    
-    # Acceleration interpolation (assuming constant acceleration for simplicity)
-    qdd = np.tile(acceleration, (integration_discretization, 1))
-    # print(qdd)
-    # Velocity update
-    qd_delt = np.cumsum(qdd * t, axis=0)
-    velocity = velocity + qd_delt[-1]
-    # print(velocity)
-    
-    # Position update
-    position_update = np.cumsum(0.5 * qdd * t * t, axis=0)
-    position = position_update[-1]
-    position = np.cumsum(velocity * t)
-    print(position)
-    # Update arm waypoints
-    arm_waypoints = arm_client.current_waypoint()
-    current_time = np.ones((1, num_joints)) * msg.t.data
-    arm_waypoints[:, 0, :] = current_time
-    arm_waypoints[:, 1, :] = position
-    arm_waypoints[:, 2, :] = velocity
-    arm_waypoints[:, 3, :] = acceleration
+def trajectory_execution_loop():
+    global position, velocity, acceleration
+    dt = 0.5
+    steps = 100
+    dt_step = dt / steps
 
-    # arm_waypoints = ([arm_waypoints], axis=0)
-    
-    print(arm_waypoints)
-    arm_client.move_to(arm_waypoints)
-    # arm_client.client.wait_for_result()
+    while not rospy.is_shutdown():
+        if not optimizer_queue:
+            rospy.sleep(0.01)
+            continue
 
+        # Get next acceleration
+        msg = optimizer_queue.popleft()
 
+        if msg['fail_flag'] == 0:
+            acceleration[0, :6] = msg['ka']
+        else:
+            acceleration = -velocity / dt
+            velocity = np.zeros_like(velocity)
+
+        # Generate trajectory points
+        traj = JointTrajectory()
+        traj.joint_names = arm_client.joint_names
+
+        v = velocity.copy()
+        p = position.copy()
+        a = acceleration.copy()
+
+        for i in range(steps):
+            v += a * dt_step
+            p += v * dt_step + 0.5 * a * dt_step ** 2
+
+            pt = JointTrajectoryPoint()
+            pt.time_from_start = rospy.Duration.from_sec((i + 1) * dt_step)
+            pt.positions = p.flatten().tolist()
+            pt.velocities = v.flatten().tolist()
+            pt.accelerations = a.flatten().tolist()
+            traj.points.append(pt)
+
+        # Update global state
+        velocity[:] = v
+        position[:] = p
+
+        # Send goal
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory = traj
+        goal.goal_time_tolerance = rospy.Duration(0.0)
+
+        arm_client.client.send_goal(goal)
+        arm_client.client.wait_for_result()
 
 
 
@@ -321,6 +345,7 @@ if __name__ == '__main__':
     config['joints_num'] = len(arm_joint_names)
     config['data_start'] = 6
     config['data_end'] = config['data_start'] + config['joints_num']
+    print(config['joints_num'])
     arm_client = FollowTrajectoryClient('arm_controller/follow_joint_trajectory', arm_joint_names, config)
 
     while not (arm_client.ready and torso_client.ready):
@@ -357,11 +382,22 @@ if __name__ == '__main__':
 
     # update_trajectory_with_optimizer()
     # Uncomment the line below to use the optimizer without ROS
-    # rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
-    # rospy.loginfo("JointStateMessage Subscriber started.")
-    # rospy.spin()
+    current_time = 0.0
+    velocity = np.zeros((1, 7))
+    position = np.zeros((1, 7))
+    acceleration = np.zeros((1, 7))
+
+    
+    rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
+
+    # Start the consumer loop
+    exec_thread = threading.Thread(target=trajectory_execution_loop)
+    exec_thread.start()
+
+    rospy.spin()
+
 
     # Uncomment the line below to use the optimizer without ROS
-    plot_smoothened_joint_trajectory()
+    # plot_smoothened_joint_trajectory()
     
     

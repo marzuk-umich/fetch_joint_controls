@@ -42,7 +42,7 @@ def publish_joint_data(file_path):
         # rate.sleep()
         print(msg.t)
         pub.publish(msg)
-        time.sleep(4)
+        time.sleep(0.5)
 
 if __name__ == "__main__":
     file_path =  np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_opt_info.npy', allow_pickle=True)
