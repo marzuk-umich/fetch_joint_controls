@@ -156,17 +156,18 @@ def plot_smoothened_joint_trajectory():
         waypoint[i, 1, :] = position
         waypoint[i, 2, :] = velocity
         waypoint[i, 3, :] = acceleration
+        print(position)
     # arm_client.move_to(waypoint)    
     fine_tuned_time_data ,fine_tuned_position_data, fine_tuned_velocity_data, fine_tuned_acceleration_data = generate_smoothened_trajectory(waypoint[:, 0, :], waypoint[:, 1, :], waypoint[:, 2, :], waypoint[:, 3, :])
     waypoint = np.zeros((1000, 4, NUMBER_OF_JOINTS))
 
-    print(np.shape(waypoint[:, 0, :]))
+    # print(np.shape(waypoint[:, 0, :]))
     waypoint[:, 0, :] = fine_tuned_time_data
     waypoint[:, 1, :] = fine_tuned_position_data
     waypoint[:, 2, :] = fine_tuned_velocity_data
     waypoint[:, 3, :] = fine_tuned_acceleration_data
     for i in range(np.shape(waypoint)[0]):
-        print(waypoint[i, :, :].shape)
+        # print(waypoint[i, :, :].shape)
         print(rospy.Duration(waypoint[i, 0, 0]))
 
     
@@ -229,7 +230,6 @@ def plot_trajectory():
         waypoint[i, 3, :] = acceleration
     # print(waypoint)
     arm_client.move_to(waypoint)    
-    
     
     #index = 1 -> position
     #index = 2 -> velocity
@@ -388,16 +388,16 @@ if __name__ == '__main__':
     acceleration = np.zeros((1, 7))
 
     
-    rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
+    # rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
 
-    # Start the consumer loop
-    exec_thread = threading.Thread(target=trajectory_execution_loop)
-    exec_thread.start()
+    # # Start the consumer loop
+    # exec_thread = threading.Thread(target=trajectory_execution_loop)
+    # exec_thread.start()
 
-    rospy.spin()
+    # rospy.spin()
 
 
     # Uncomment the line below to use the optimizer without ROS
-    # plot_smoothened_joint_trajectory()
+    plot_smoothened_joint_trajectory()
     
     

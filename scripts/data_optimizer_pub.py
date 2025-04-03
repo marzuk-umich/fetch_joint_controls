@@ -40,7 +40,7 @@ def publish_joint_data(file_path):
         msg.ka = Float32MultiArray(data=ka[i,:].tolist())
         msg.fail_flag = Float32(data=fail_flag[i])
         # rate.sleep()
-        print(msg.t)
+        print(msg.fail_flag)
         pub.publish(msg)
         time.sleep(0.5)
 
