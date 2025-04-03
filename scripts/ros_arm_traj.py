@@ -145,7 +145,6 @@ def trajectory_execution_loop(arm_client):
             pt.accelerations = a_traj[i].tolist()
             traj.points.append(pt)
 
-            # Logging
             commanded_positions_log.append((t_now + (i + 1) * dt_step, pt.positions[:]))
             commanded_acceleration_log.append((t_now + (i + 1) * dt_step, pt.accelerations[:]))
 
@@ -227,7 +226,9 @@ if __name__ == '__main__':
     torso_waypoints = np.concatenate([torso_client.current_waypoint(), torso_waypoints], axis=0)
     torso_client.move_to(torso_waypoints, False)
 
-
+    detailed_trajectory     = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
+    position[0,:6] = detailed_trajectory.item().get('q')[0,:]
+    velocity[0,:6] = detailed_trajectory.item().get('qd')[0,:]
 
     # Move ARM to save position
     arm_waypoints = arm_client.create_zero_waypoint()
@@ -240,7 +241,7 @@ if __name__ == '__main__':
 
     arm_waypoints = arm_client.create_zero_waypoint()
     arm_waypoints[:, 0, :] = 4.
-    arm_waypoints[:, 1, :] = np.array([0, 0, 0, 0, 0.0, 0.0, 0.0])
+    arm_waypoints[:, 1, :] = position
     arm_waypoints[:, 2, :] = 0.
     arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
     arm_client.move_to(arm_waypoints, False)
@@ -251,9 +252,7 @@ if __name__ == '__main__':
     # position = arm_client.state[:dof].T.copy()    # (1, 7) from JointState position
     # velocity = arm_client.state[dof:].T.copy()    # (1, 7) from JointState velocity
 
-    detailed_trajectory     = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
-    position[0,:6] = detailed_trajectory.item().get('q')[0,:]
-    velocity[0,:6] = detailed_trajectory.item().get('qd')[0,:]
+
 
     rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
     # multithreading for parallel processing
