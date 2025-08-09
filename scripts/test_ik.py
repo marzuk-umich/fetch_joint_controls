@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
     # Move torso up!
     torso_time = np.ones((1, 1, torso_client.config['joints_num'])) * 4
-    torso_goal_pos = np.ones((1, 1, torso_client.config['joints_num'])) * 0.3
+    torso_goal_pos = np.ones((1, 1, torso_client.config['joints_num'])) * 0.5
     torso_goal_vel = np.ones((1, 1, torso_client.config['joints_num'])) * 0.0
     torso_waypoints = np.concatenate([torso_time, torso_goal_pos, torso_goal_vel], axis=1)
     rospy.loginfo("Raising torso...")
@@ -168,42 +168,19 @@ if __name__ == '__main__':
     arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
     arm_client.move_to(arm_waypoints, False)
 
-    # Move joints independently using simulation!!
-    # rospy.loginfo("Moving joints independently...")
-    # waypoints = test_joints_independently(arm_client)
-    # arm_client.move_to(waypoints, False)
+    arm_waypoints = arm_client.create_zero_waypoint()
+    arm_waypoints[:, 0, :] = 4.
+    arm_waypoints[:, 1, :] = np.array([0, 0, 0, 0, 0.0, 0.0, 0.0])
+    arm_waypoints[:, 2, :] = 0.
+    arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
+    arm_client.move_to(arm_waypoints, False)
 
+
+    arm_waypoints = arm_client.create_zero_waypoint()
+    arm_waypoints[:, 0, :] = 4.
+    arm_waypoints[:, 1, :] = np.array([-0.2006661959, -0.1453983098, -0.8702124529, 1.6226107437, -0.7232583132, 0.6575106085, -0.7030806393])
+    # arm_waypoints[:, 1, :] = np.array([0.2824558974894058, -0.057202187159564696, -0.3893367955496445, 0.7184097570171067, -0.2102948033771266, 0.2035055519724829, 0.36164821064252367])
+    arm_waypoints[:, 2, :] = 0.
+    arm_waypoints = np.concatenate([arm_client.current_waypoint(), arm_waypoints], axis=0)
+    arm_client.move_to(arm_waypoints, False)
     print("ARM STATE: ", arm_client.state)
-    # input("Press any key")
-
-    # xi = 0.
-    # xf = 1.48353
-    # JOINT_IDX = 6
-    # TOTAL_TIME = 8.
-    # rospy.loginfo(f"Moving joint {JOINT_IDX} following generated trajectory")
-    # arm_client.create_recording()
-    # arm_client.start_thread()
-    # t, pos, vel = generate_trajectory(desired_position=xf, initial_position=xi, max_vel=1., total_time=TOTAL_TIME)
-    # waypoints = arm_client.current_waypoint(n=t.shape[0])
-    # waypoints[:, 0, :] = t[:, np.newaxis]
-    # waypoints[:, 1, JOINT_IDX] = pos
-    # waypoints[:, 2, JOINT_IDX] = vel
-    # arm_client.move_to(waypoints, False)
-    # arm_client.stop_thread()
-
-    # plot_trajectories(t, pos, vel, arm_client.time_recordings, arm_client.state_recordings[JOINT_IDX, :], arm_client.state_recordings[len(arm_client.joint_names) + JOINT_IDX, :])
-
-    # arm_client.create_recording()
-    # arm_client.start_thread()
-    # t, pos, vel = generate_trajectory(desired_position=xi, initial_position=xf, max_vel=1., total_time=TOTAL_TIME / 2.)
-    # waypoints = arm_client.current_waypoint(n=t.shape[0])
-    # waypoints[:, 0, :] = t[:, np.newaxis]
-    # waypoints[:, 1, JOINT_IDX] = pos
-    # waypoints[:, 2, JOINT_IDX] = vel
-    # arm_client.move_to(waypoints, False)
-    # arm_client.stop_thread()
-
-    # plot_trajectories(t, pos, vel, arm_client.time_recordings, arm_client.state_recordings[JOINT_IDX, :], arm_client.state_recordings[len(arm_client.joint_names) + JOINT_IDX, :])
-    
-
-    

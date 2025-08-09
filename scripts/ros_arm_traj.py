@@ -23,7 +23,10 @@ class FollowTrajectoryClient(object):
         self.state = np.zeros(((len(joint_names) * 2), 1))
         self.ready = False
         self.actual_positions_log = []
+        self.actual_velocity_log = []
         self.actual_acceleration_log = []
+        self.prev_velocity = None
+        self.prev_timestamp = None
         rospy.Subscriber('/joint_states', JointState, callback=self._joint_callback, queue_size=10)
 
     def move_to(self, waypoints, cb=False):
@@ -39,11 +42,9 @@ class FollowTrajectoryClient(object):
         follow_goal = FollowJointTrajectoryGoal()
         follow_goal.trajectory = trajectory
         follow_goal.goal_time_tolerance = rospy.Duration(0.0)
-        if cb:
-            self.client.send_goal(follow_goal)
-        else:
-            self.client.send_goal(follow_goal)
-        self.client.wait_for_result()
+        self.client.send_goal(follow_goal)
+        if not cb:
+            self.client.wait_for_result()
 
     def _joint_callback(self, msg):
         if self.joint_names[0] in msg.name:
@@ -53,7 +54,13 @@ class FollowTrajectoryClient(object):
             self.ready = True
             t = self.timestamp.secs + self.timestamp.nsecs * 1e-9
             self.actual_positions_log.append((t, self.state[:len(self.joint_names), 0].tolist()))
-            self.actual_acceleration_log.append((t, self.state[:len(self.joint_names), 0].tolist()))
+            self.actual_velocity_log.append((t, self.state[len(self.joint_names):, 0].tolist()))
+            if self.prev_velocity is not None and self.prev_timestamp is not None:
+                dt = t - self.prev_timestamp
+                acc_est = (self.state[len(self.joint_names):, 0] - self.prev_velocity) / dt
+                self.actual_acceleration_log.append((t, acc_est.tolist()))
+            self.prev_velocity = self.state[len(self.joint_names):, 0].copy()
+            self.prev_timestamp = t
 
     def create_zero_waypoint(self, n=1):
         return np.zeros((n, 4, self.config['joints_num']))
@@ -65,6 +72,49 @@ class FollowTrajectoryClient(object):
         acc = np.zeros((1, 1, self.config['joints_num']))
         return np.concatenate([time, pos, vel, acc], axis=1)
 
+def export_to_csv():
+    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/commanded_all_joints.csv", "w", newline="") as f_cmd:
+        writer = csv.writer(f_cmd)
+        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
+        for t, pos_list in commanded_positions_log:
+            writer.writerow([t] + pos_list)
+
+    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/commanded_all_joints_velocity.csv", "w", newline="") as f_vel:
+        writer = csv.writer(f_vel)
+        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
+        for t, vel_list in commanded_velocity_log:
+            writer.writerow([t] + vel_list)
+
+    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/commanded_all_joints_accln.csv", "w", newline="") as f_cmd:
+        writer = csv.writer(f_cmd)
+        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
+        for t, accln_list in commanded_acceleration_log:
+            writer.writerow([t] + accln_list)
+
+    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/actual_all_joints.csv", "w", newline="") as f_act:
+        writer = csv.writer(f_act)
+        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
+        for t, pos_list in arm_client.actual_positions_log:
+            writer.writerow([t] + pos_list)
+
+    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/actual_all_joints_velocity.csv", "w", newline="") as f_vel:
+        writer = csv.writer(f_vel)
+        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
+        for t, vel_list in arm_client.actual_velocity_log:
+            writer.writerow([t] + vel_list)
+
+    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/actual_all_joints_accln.csv", "w", newline="") as f_act:
+        writer = csv.writer(f_act)
+        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
+        for t, accln_list in arm_client.actual_acceleration_log:
+            writer.writerow([t] + accln_list)
+
+    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/fail_flags.csv", "w", newline="") as f_fail:
+        writer = csv.writer(f_fail)
+        writer.writerow(["Time", "FailFlag"])
+        for t, fail_flag in fail_flags_log:
+            writer.writerow([t, fail_flag])
+
 optimizer_queue = deque()
 position = np.zeros((1, 7))
 velocity = np.zeros((1, 7))
@@ -72,7 +122,9 @@ acceleration = np.zeros((1, 7))
 current_time = 0.0
 dof = 7
 commanded_positions_log = []
+commanded_velocity_log = []
 commanded_acceleration_log = []
+fail_flags_log = []
 
 def optimizer_callback(msg):
     optimizer_queue.append({
@@ -86,54 +138,48 @@ def trajectory_execution_loop(arm_client):
     dt = 0.5
     steps = 500
     dt_step = dt / steps
-
-
+    flag = 0
     while not rospy.is_shutdown():
         if not optimizer_queue:
             rospy.sleep(0.01)
             continue
 
-        rospy.loginfo(f"[Before pop] Queue length: {len(optimizer_queue)}")
-
         msg = optimizer_queue.popleft()
-
-        rospy.loginfo(f"[Popped] fail_flag = {msg['fail_flag']}")
-
-        print(msg['fail_flag'])
+        fail_flags_log.append((rospy.get_time(), msg['fail_flag']))
+        
         if msg['fail_flag'] == 0:
-            acceleration[0, :6] = msg['ka']
-        else:
-            decay_factor = 0.1  # how quickly to slow down (0.9 = gentle, 0.5 = sharp)
-            velocity *= decay_factor
-            acceleration = -velocity / dt
-            position += velocity * dt + 0.5 * acceleration * dt**2
+            acceleration = np.zeros((1, 7))
+            acceleration[0] = np.append(msg['ka'], 0.0)
+            # print(acceleration[0,1])
 
-        qdd = np.repeat(acceleration, steps, axis=0)
+        elif msg['fail_flag'] !=0 :
+            acceleration[0] = -velocity[0] / dt
+            position += velocity * dt + 0.5 * acceleration * dt**2
+            velocity[:] = 0
+
+
+        qdd = np.tile(acceleration, (steps, 1))
         q = np.zeros((steps, dof))
         qd = np.zeros((steps, dof))
         q[0] = position.copy()
         qd[0] = velocity.copy()
 
-        # Integrate acceleration to get full trajectory
+        print(position[0,5])
+
         for i in range(1, steps):
             if msg['fail_flag'] == 0:
                 qd[i] = qd[i - 1] + qdd[i - 1] * dt_step
                 q[i] = q[i - 1] + qd[i - 1] * dt_step + 0.5 * qdd[i - 1] * dt_step**2
 
             if msg['fail_flag'] != 0:
-                qd[i] = np.zeros((1,7))
                 q[i] = q[i - 1] + qd[i - 1] * dt_step + 0.5 * qdd[i - 1] * dt_step**2
+                qd[i] = np.zeros((1,7))
 
 
-        # Joint limit enforcement
-        pos_lower = np.full((dof,), -np.pi)
-        pos_upper = np.full((dof,), np.pi)
-        q = np.clip(q, pos_lower, pos_upper)
-
-        # Build JointTrajectory
         traj = JointTrajectory()
         traj.joint_names = arm_client.joint_names
         t_now = rospy.get_time()
+
         v_traj = _interpolate_q(velocity, steps)
         a_traj = _interpolate_q(acceleration[0], steps)
 
@@ -141,19 +187,17 @@ def trajectory_execution_loop(arm_client):
             pt = JointTrajectoryPoint()
             pt.time_from_start = rospy.Duration((i + 1) * dt_step)
             pt.positions = q[i].tolist()
-            pt.velocities = v_traj[i].tolist()
-            pt.accelerations = a_traj[i].tolist()
+            pt.velocities = qd[i].tolist()
+            pt.accelerations = qdd[i].tolist()
             traj.points.append(pt)
 
             commanded_positions_log.append((t_now + (i + 1) * dt_step, pt.positions[:]))
+            commanded_velocity_log.append((t_now + (i + 1) * dt_step, pt.velocities[:]))
             commanded_acceleration_log.append((t_now + (i + 1) * dt_step, pt.accelerations[:]))
 
-        # # Only update state if optimizer succeeded
-        if msg['fail_flag'] == 0:
-            position[:] = q[-1]
-            velocity[:] = qd[-1]
-
-        current_time += dt
+        # Update state for continuity in next loop
+        position[:] = q[-1]
+        velocity[:] = qd[-1]
 
         goal = FollowJointTrajectoryGoal()
         goal.trajectory = traj
@@ -174,30 +218,6 @@ def _interpolate_q(q, out_steps, match_end=True, match_start=False):
     q_interp = [np.interp(coll_times, in_times, q[:, i]) for i in range(dof)]
     return np.array(q_interp, order='F').T
 
-def export_to_csv():
-    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/commanded_all_joints.csv", "w", newline="") as f_cmd:
-        writer = csv.writer(f_cmd)
-        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
-        for t, pos_list in commanded_positions_log:
-            writer.writerow([t] + pos_list)
-    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/commanded_all_joints_accln.csv", "w", newline="") as f_cmd:
-        writer = csv.writer(f_cmd)
-        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
-        for t, accln_list in commanded_acceleration_log:
-            writer.writerow([t] + accln_list)
-
-    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/actual_all_joints.csv", "w", newline="") as f_act:
-        writer = csv.writer(f_act)
-        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
-        for t, pos_list in arm_client.actual_positions_log:
-            writer.writerow([t] + pos_list)
-
-    with open("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/actual_all_joints_accln.csv", "w", newline="") as f_act:
-        writer = csv.writer(f_act)
-        writer.writerow(["Time"] + [f"Joint_{i}" for i in range(7)])
-        for t, accln_list in arm_client.actual_acceleration_log:
-            writer.writerow([t] + accln_list)
-
 def on_shutdown():
     rospy.loginfo("Shutting down, saving logs to CSV...")
     export_to_csv()
@@ -214,25 +234,20 @@ if __name__ == '__main__':
     arm_config = {'joints_num': len(arm_joint_names), 'data_start': 6, 'data_end': 13}
     arm_client = FollowTrajectoryClient("arm_controller/follow_joint_trajectory", arm_joint_names, arm_config)
 
-
-    # # Move torso up!
     torso_time = np.ones((1, 1, torso_client.config['joints_num'])) * 3
     torso_goal_pos = np.ones((1, 1, torso_client.config['joints_num'])) * 0.3
     torso_goal_vel = np.ones((1, 1, torso_client.config['joints_num'])) * 0.0
     torso_goal_accln = np.ones((1, 1, torso_client.config['joints_num'])) * 0.0
-    torso_waypoints = np.concatenate([torso_time, torso_goal_pos, torso_goal_vel,torso_goal_accln], axis=1)
+    torso_waypoints = np.concatenate([torso_time, torso_goal_pos, torso_goal_vel, torso_goal_accln], axis=1)
     rospy.loginfo("Raising torso...")
-    print(np.shape(torso_client.current_waypoint()))
     torso_waypoints = np.concatenate([torso_client.current_waypoint(), torso_waypoints], axis=0)
     torso_client.move_to(torso_waypoints, False)
 
-    detailed_trajectory     = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
-    position[0,:6] = detailed_trajectory.item().get('q')[0,:]
-    velocity[0,:6] = detailed_trajectory.item().get('qd')[0,:]
+    detailed_trajectory = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/New/center_box_avoidance/center_box_avoidance/center_box_avoidance_detailed_traj.npy', allow_pickle=True)
+    position[0, :6] = detailed_trajectory.item().get('q')[0, :]
 
-    # Move ARM to save position
     arm_waypoints = arm_client.create_zero_waypoint()
-    arm_waypoints[:, 0, :] = 5.
+    arm_waypoints[:, 0, :] = 4.
     arm_waypoints[:, 1, :] = np.array([1.32, 0, -1.57, 1.72, 0.0, 1.66, 0.0])
     arm_waypoints[:, 2, :] = 0.
     rospy.loginfo("Moving arm to safe position...")
@@ -249,13 +264,7 @@ if __name__ == '__main__':
     while not arm_client.ready and not rospy.is_shutdown():
         rospy.sleep(0.1)
 
-    # position = arm_client.state[:dof].T.copy()    # (1, 7) from JointState position
-    # velocity = arm_client.state[dof:].T.copy()    # (1, 7) from JointState velocity
-
-
-
     rospy.Subscriber('/traj_opt_data', traj_opt, optimizer_callback)
-    # multithreading for parallel processing
     exec_thread = threading.Thread(target=trajectory_execution_loop, args=(arm_client,))
     exec_thread.start()
 

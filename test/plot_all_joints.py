@@ -18,7 +18,7 @@ cmd_time, cmd_joints = read_csv("/home/marzuk/catkin_ws/src/fetch_joint_controls
 act_time, act_joints = read_csv("/home/marzuk/catkin_ws/src/fetch_joint_controls/test/actual_all_joints.csv")
 
 # Align start time
-t0 = min(cmd_time[0], act_time[0])
+t0 = act_time[0]
 cmd_time = [t - t0 for t in cmd_time]
 act_time = [t - t0 for t in act_time]
 

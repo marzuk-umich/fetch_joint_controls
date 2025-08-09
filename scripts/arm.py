@@ -119,8 +119,8 @@ class FollowTrajectoryClient(object):
 def plot_smoothened_joint_trajectory():
     global initial_position, initial_velocity
 
-    detailed_trajectory     = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_detailed_traj.npy', allow_pickle=True)
-    optimizer_raw_data      = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/center_box_avoidance_pi_24/center_box_avoidance_pi_24_opt_info.npy', allow_pickle=True)
+    detailed_trajectory     = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/tracking_test2_pi_24/tracking_test2_pi_24_detailed_traj.npy', allow_pickle=True)
+    optimizer_raw_data      = np.load('/home/marzuk/catkin_ws/src/fetch_joint_controls/scripts/tracking_test2_pi_24/tracking_test2_pi_24_opt_info.npy', allow_pickle=True)
     NUMBER_OF_JOINTS        = 7
     dt                      = 0.5
     current_time            = np.zeros((1,NUMBER_OF_JOINTS))
@@ -175,7 +175,7 @@ def plot_smoothened_joint_trajectory():
     # index = 1 -> position
     # index = 2 -> velocity
     # index = 3 -> acceleration
-    plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data=position_detailed, index=1 ) 
+    plot_trajectories_with_optimizer(waypoint, t_detailed, detailed_data=acceleration_detailed, index=3 ) 
         
 
 
