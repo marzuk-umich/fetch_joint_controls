@@ -52,7 +52,7 @@ python3 "$LOCAL_VIEW_SCRIPT" "$LOCAL_DIR/scene.pcd"
 
 # --- Step 9: SCP scene.pcd to remote machine ---
 echo "🚀 Copying scene.pcd to remote machine..."
-scp scene.pcd $REMOTE_USER@$REMOTE_IP:$REMOTE_PATH
+scp scene.pcd $REMOTE_USER@$REMOTE_IP:$REMOTE_PATH``
 
 # --- Step 10: docker cp scene.pcd into container ---
 echo " Copying scene.pcd into Docker container..."
